@@ -4,31 +4,43 @@ local Active = false
 local test = nil
 local test1 = nil
 local spam = true
-
+local playerPed = PlayerPedId()
+local inVehicle = IsPedInAnyVehicle(playerPed, false) 
  
 
 
-RegisterCommand("help", function(source, args, raw)
-	if (QBCore.Functions.GetPlayerData().metadata["isdead"]) or (QBCore.Functions.GetPlayerData().metadata["inlaststand"]) and spam then
-		QBCore.Functions.TriggerCallback('hhfw:docOnline', function(EMSOnline, hasEnoughMoney)
-			if EMSOnline <= Config.Doctor and hasEnoughMoney and spam then
-				SpawnVehicle(GetEntityCoords(PlayerPedId()))
-				TriggerServerEvent('hhfw:charge')
-				Notify("Medic is arriving")
-			else
-				if EMSOnline > Config.Doctor then
-					Notify("There is too many medics online", "error")
-				elseif not hasEnoughMoney then
-					Notify("Not Enough Money", "error")
-				else
-					Notify("Wait Paramadic is on its Way", "primary")
-				end	
-			end
-		end)
-	else
-		Notify("This can only be used when dead", "error")
-	end
+RegisterCommand("EMS", function(source, args, raw)
+    local playerData = QBCore.Functions.GetPlayerData()
+    local isDead = playerData.metadata["isdead"]
+    local inLastStand = playerData.metadata["inlaststand"]
+    local spam = true -- You need to define 'spam' appropriately
+    local inVehicle = IsPedInAnyVehicle(PlayerPedId(), false)
+    
+    if (isDead or inLastStand) and spam then
+        QBCore.Functions.TriggerCallback('hhfw:docOnline', function(EMSOnline, hasEnoughMoney)
+            if EMSOnline <= Config.Doctor and hasEnoughMoney then
+                if inVehicle then
+                    SpawnVehicle(GetEntityCoords(PlayerPedId()))
+                    TriggerServerEvent('hhfw:charge')
+                    Notify("Medic is arriving")
+                else
+					SpawnVehicle(GetEntityCoords(PlayerPedId()))
+                    TriggerServerEvent('hhfw:charge')
+                    Notify("Medic is arriving")
+                end
+            else
+                if EMSOnline > Config.Doctor then
+                    Notify("There are too many medics online", "error")
+                elseif not hasEnoughMoney then
+                    Notify("Not Enough Money", "error")
+                end
+            end
+        end)
+    else
+        Notify("This can only be used when dead", "error")
+    end
 end)
+
 
 
 
@@ -80,7 +92,9 @@ Citizen.CreateThread(function()
 			local ld = GetEntityCoords(test1)
             local dist = Vdist(loc.x, loc.y, loc.z, lc.x, lc.y, lc.z)
 			local dist1 = Vdist(loc.x, loc.y, loc.z, ld.x, ld.y, ld.z)
-            if dist <= 10 then
+			local playerPed = PlayerPedId()
+			local inVehicle = IsPedInAnyVehicle(playerPed, false) 
+			if dist <= 10 and not inVehicle then
 				if Active then
 					TaskGoToCoordAnyMeans(test1, loc.x, loc.y, loc.z, 1.0, 0, 0, 786603, 0xbf800000)
 				end
@@ -89,7 +103,10 @@ Citizen.CreateThread(function()
 					ClearPedTasksImmediately(test1)
 					DoctorNPC()
 				end
-            end
+			elseif dist <= 8 and inVehicle then
+				Active = false
+				DoctorNPC()
+			end
         end
     end
 end)
@@ -100,25 +117,45 @@ function DoctorNPC()
 	while not HasAnimDictLoaded("mini@cpr@char_a@cpr_str") do
 		Citizen.Wait(1000)
 	end
+	if not inVehicle then
+		TaskPlayAnim(test1, "mini@cpr@char_a@cpr_str","cpr_pumpchest",1.0, 1.0, -1, 9, 1.0, 0, 0, 0)
+		QBCore.Functions.Progressbar("revive_doc", "The doctor is giving you medical aid", Config.ReviveTime, false, false, {
+			disableMovement = false,
+			disableCarMovement = false,
+			disableMouse = false,
+			disableCombat = true,
+		}, {}, {}, {}, function() -- Done
+			ClearPedTasks(test1)
+			Citizen.Wait(500)
+			TriggerEvent("hospital:client:Revive")
+			StopScreenEffect('DeathFailOut')	
+			Notify("Your treatment is done, you were charged: "..Config.Price, "success")
+			RemovePedElegantly(test1)
+			DeleteEntity(test)
+			Wait(5000)
+			DeleteEntity(test1)
+			spam = true
+		end)
+	elseif inVehicle then
+		QBCore.Functions.Progressbar("revive_doc", "The doctor is giving you medical aid", Config.ReviveTime, false, false, {
+			disableMovement = false,
+			disableCarMovement = false,
+			disableMouse = false,
+			disableCombat = true,
+		}, {}, {}, {}, function() -- Done
+			ClearPedTasks(test1)
+			Citizen.Wait(500)
+			TriggerEvent("hospital:client:Revive")
+			StopScreenEffect('DeathFailOut')	
+			Notify("Your treatment is done, you were charged: "..Config.Price, "success")
+			RemovePedElegantly(test1)
+			DeleteEntity(test)
+			Wait(5000)
+			DeleteEntity(test1)
+			spam = true
+		end)
+	end
 
-	TaskPlayAnim(test1, "mini@cpr@char_a@cpr_str","cpr_pumpchest",1.0, 1.0, -1, 9, 1.0, 0, 0, 0)
-	QBCore.Functions.Progressbar("revive_doc", "The doctor is giving you medical aid", Config.ReviveTime, false, false, {
-		disableMovement = false,
-		disableCarMovement = false,
-		disableMouse = false,
-		disableCombat = true,
-	}, {}, {}, {}, function() -- Done
-		ClearPedTasks(test1)
-		Citizen.Wait(500)
-        	TriggerEvent("hospital:client:Revive")
-		StopScreenEffect('DeathFailOut')	
-		Notify("Your treatment is done, you were charged: "..Config.Price, "success")
-		RemovePedElegantly(test1)
-		DeleteEntity(test)
-		Wait(5000)
-		DeleteEntity(test1)
-		spam = true
-	end)
 end
 
 
